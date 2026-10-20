@@ -13,4 +13,4 @@ Release/
 
 # Ignora i file di configurazione locali dell'IDE
 .mxproject
-*.launch
+*.launchbuild/

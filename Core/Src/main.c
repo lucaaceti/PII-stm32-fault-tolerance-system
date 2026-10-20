@@ -299,6 +299,7 @@ int main(void)
   MX_USART2_UART_Init();
   MX_CRC_Init();
   /* USER CODE BEGIN 2 */
+  setvbuf(stdout, NULL, _IONBF, 0);
   /* USER CODE BEGIN 2 */
 
   HAL_Delay(2000);

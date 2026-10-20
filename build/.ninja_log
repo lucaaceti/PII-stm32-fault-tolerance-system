@@ -1,0 +1,25 @@
+# ninja log v7
+4	27	1792417665920946657	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Core/Startup/startup_stm32l152retx.s.o	ce28b786da4fa970
+2	50	1792417665919260801	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Core/Src/sysmem.c.o	730e50a63649ffdd
+2	78	1792417665918962434	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Core/Src/syscalls.c.o	29425681a770eb6c
+1	172	1792417665917663575	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Core/Src/stm32l1xx_hal_msp.c.o	c0fa710b41a2c1af
+3	174	1792417665919538776	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Core/Src/system_stm32l1xx.c.o	7a6cd44eaee2acec
+2	101	1792417950436585691	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Core/Src/stm32l1xx_it.c.o	ae649b3e30a71f41
+5	203	1792417665921236055	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Drivers/STM32L1xx_HAL_Driver/Src/stm32l1xx_hal.c.o	4e4a1338a30945a7
+52	237	1792417665968609045	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Drivers/STM32L1xx_HAL_Driver/Src/stm32l1xx_hal_crc.c.o	5b184046b9f95860
+1	246	1792417665916663565	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Core/Src/main.c.o	c449b7bad94aa78f
+29	250	1792417665945432769	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Drivers/STM32L1xx_HAL_Driver/Src/stm32l1xx_hal_cortex.c.o	6c3cb81782b4f786
+82	298	1792417665998807219	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Drivers/STM32L1xx_HAL_Driver/Src/stm32l1xx_hal_dma.c.o	ae6ecf809817f763
+173	366	1792417666089748345	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Drivers/STM32L1xx_HAL_Driver/Src/stm32l1xx_hal_exti.c.o	cf92a525343dfba4
+175	376	1792417666091539234	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Drivers/STM32L1xx_HAL_Driver/Src/stm32l1xx_hal_flash.c.o	97549ada95f376cd
+205	398	1792417666120665663	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Drivers/STM32L1xx_HAL_Driver/Src/stm32l1xx_hal_flash_ramfunc.c.o	2e6e08786a4332af
+180	414	1792417666096306325	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Drivers/STM32L1xx_HAL_Driver/Src/stm32l1xx_hal_flash_ex.c.o	c9ee07b8d93d0d80
+238	437	1792417666154390003	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Drivers/STM32L1xx_HAL_Driver/Src/stm32l1xx_hal_gpio.c.o	3081df8a95ef2f0b
+247	438	1792417666162666094	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Drivers/STM32L1xx_HAL_Driver/Src/stm32l1xx_hal_pwr.c.o	6137010949b31af
+251	438	1792417666167410884	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Drivers/STM32L1xx_HAL_Driver/Src/stm32l1xx_hal_pwr_ex.c.o	89c0c95828f0642e
+300	503	1792417666216702397	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Drivers/STM32L1xx_HAL_Driver/Src/stm32l1xx_hal_rcc.c.o	6d98e19926eb136e
+367	505	1792417666283211562	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Drivers/STM32L1xx_HAL_Driver/Src/stm32l1xx_hal_rcc_ex.c.o	504f73fa3bc2c4f0
+377	610	1792417666293580805	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Drivers/STM32L1xx_HAL_Driver/Src/stm32l1xx_hal_uart.c.o	3f73de37e73ba33f
+101	166	1792417950535586708	PII-stm32-fault-tolerance-system.elf	67f06d2b56e9f8f4
+1	128	1792419721292836349	CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir/Core/Src/main.c.o	c449b7bad94aa78f
+128	196	1792419721419837675	PII-stm32-fault-tolerance-system.elf	f06e8db9bfe6a579

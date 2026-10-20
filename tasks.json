@@ -1,0 +1,23 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Firmware",
+            "type": "shell",
+            "command": "cmake --build build -j$(nproc)",
+            "group": "none",
+            "problemMatcher": ["$gcc"]
+        },
+        {
+            "label": "Build and Flash Remote",
+            "type": "shell",
+            "command": "./flash.sh",
+            "dependsOn": "Build Firmware",
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+            "problemMatcher": []
+        }
+    ]
+}

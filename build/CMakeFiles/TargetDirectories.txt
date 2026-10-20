@@ -1,0 +1,3 @@
+/home/luca/progetti/PII-stm32-fault-tolerance-system/build/CMakeFiles/PII-stm32-fault-tolerance-system.elf.dir
+/home/luca/progetti/PII-stm32-fault-tolerance-system/build/CMakeFiles/edit_cache.dir
+/home/luca/progetti/PII-stm32-fault-tolerance-system/build/CMakeFiles/rebuild_cache.dir

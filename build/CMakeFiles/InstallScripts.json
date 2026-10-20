@@ -1,0 +1,7 @@
+{
+	"InstallScripts" : 
+	[
+		"/home/luca/progetti/PII-stm32-fault-tolerance-system/build/cmake_install.cmake"
+	],
+	"Parallel" : false
+}
