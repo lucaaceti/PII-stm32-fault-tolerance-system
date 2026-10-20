@@ -58,6 +58,12 @@ UART_HandleTypeDef huart2;
 
 //Initialization of the struct for future checkpoints
 SystemState saved_context = {0};
+static uint32_t recovery_return_msp;
+
+// Temporary stack used while validating and restoring a checkpoint. It keeps
+// recovery code and its local variables away from the checkpoint destination.
+#define RECOVERY_STACK_WORDS 1024U
+static uint32_t recovery_stack[RECOVERY_STACK_WORDS] __attribute__((aligned(8)));
 
 /* USER CODE END PV */
 
@@ -72,6 +78,9 @@ static void MX_CRC_Init(void);
 void Capture_Registers(uint32_t *stack_pointer); // Saves the MSP, the Exception frame and registers R4-R11
 void Save_State_EEPROM(SystemState *stato); // Saves in EEPROM local variables and the elements above
 void Restore_Context(void); // Restores EEPROM's data in RAM
+void Recover_Checkpoint(void) __attribute__((naked, noreturn));
+void Recover_Checkpoint_C(void) __attribute__((noreturn));
+void Restart_From_Boot_Stack(void) __attribute__((naked, noreturn));
 void LU_Decomposition(void);
 void Print_Matrix(float mat[MATRIX_SIZE][MATRIX_SIZE], const char* name); // Function used to show the actual process (debug print)
 void Print_Reset_Cause(void);//Function used to show the cause of the reset
@@ -298,9 +307,9 @@ int main(void)
   MX_GPIO_Init();
   MX_USART2_UART_Init();
   MX_CRC_Init();
+  
   /* USER CODE BEGIN 2 */
   setvbuf(stdout, NULL, _IONBF, 0);
-  /* USER CODE BEGIN 2 */
 
   HAL_Delay(2000);
   Print_Reset_Cause();
@@ -318,42 +327,7 @@ int main(void)
     if (check_validity == 0xACCEDED) {
             printf(" Valid checkpoint found in EEPROM, starting recovery process \r\n");
             HAL_Delay(1000);
-
-            // Static variables to avoid overwriting registers during the recovery process.`
-            static uint32_t eeprom_addr;
-            static uint32_t *ptr_struct;
-            static uint32_t struct_size;
-            static uint32_t *ptr_ram;
-            static uint32_t ram_words;
-            static uint32_t i;
-
-            // Copy of the registers in RAM
-            eeprom_addr = 0x08080000;
-            ptr_struct = (uint32_t*)&saved_context;
-            struct_size = sizeof(SystemState) / 4;
-            for (i = 0; i < struct_size; i++) {
-                ptr_struct[i] = *(__IO uint32_t *)eeprom_addr;
-                eeprom_addr += 4;
-            }
-
-            // Copy of the remaining values
-            ptr_ram = (uint32_t*)saved_context.msp;
-            ram_words = saved_context.stack_size / 4;
-
-            // Restoring R4-R11
-            for (i = 0; i < 8; i++) {
-                ptr_ram[i] = *(__IO uint32_t *)eeprom_addr;
-                eeprom_addr += 4;
-            }
-
-            // Restoring Local variables
-            for (i = 16; i < ram_words; i++) {
-                ptr_ram[i] = *(__IO uint32_t *)eeprom_addr;
-                eeprom_addr += 4;
-            }
-
-
-            Restore_Context();
+            Recover_Checkpoint();
     }
     else
     {
@@ -406,8 +380,7 @@ void SystemClock_Config(void)
 
   /** Initializes the CPU, AHB and APB buses clocks
   */
-  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK
-                              |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK|RCC_CLOCKTYPE_SYSCLK|RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
@@ -572,6 +545,15 @@ void Save_State_EEPROM(SystemState *saved_state)
     saved_state->stack_size = starting_address - current_address;
     printf(" Bytes to copy in EEPROM: %lu \r\n", saved_state->stack_size);
 
+    // Treat the checkpoint as 32-bit words, matching the EEPROM programming
+    // granularity and the CRC peripheral input format
+    uint32_t *ptr_struct = (uint32_t *)saved_state;
+    uint32_t struct_size_words = sizeof(SystemState) / 4U;
+    uint32_t *ptr_ram = (uint32_t *)current_address;
+    uint32_t ram_words = saved_state->stack_size / 4U;
+
+    // The CRC is calculated after the payload has been written, using the
+    // values read back from EEPROM.
 	//Starting EEPROM dump timer
 	CoreDebug->DEMCR |= CoreDebug_DEMCR_TRCENA_Msk;
 	DWT->CYCCNT = 0;
@@ -581,29 +563,46 @@ void Save_State_EEPROM(SystemState *saved_state)
     //Writing values in EEPROM
     HAL_FLASHEx_DATAEEPROM_Unlock();
 
-    // Saving SystemState starting from address 0x08080000
-    uint32_t *ptr_struct = (uint32_t*)saved_state;
-    uint32_t struct_size_words = sizeof(SystemState) / 4;
+    // Store the SystemState header starting at the checkpoint base address
     for (uint32_t i = 0; i < struct_size_words; i++) {
         HAL_FLASHEx_DATAEEPROM_Program(FLASH_TYPEPROGRAMDATA_WORD, eeprom_address, ptr_struct[i]);
         eeprom_address += 4;	// Advance by 4 bytes at a time
     }
 
-    // Saving remaining data, excluding the redundant Exception frame (index from 8 to 15)
-    uint32_t *ptr_ram = (uint32_t*)current_address;
-    uint32_t ram_words = saved_state -> stack_size / 4;
-
-    // Saving R4-R11
+    // Store R4-R11, The exception frame at indices 8-15 is represented by
+    // the corresponding fields in SystemState and is therefore not stored twice
     for (uint32_t i = 0; i < 8; i++) {
         HAL_FLASHEx_DATAEEPROM_Program(FLASH_TYPEPROGRAMDATA_WORD, eeprom_address, ptr_ram[i]);
         eeprom_address += 4;
     }
 
-    // Saving Local variables
+    // Store local variables after the exception frame
     for (uint32_t i = 16; i < ram_words; i++) {
             HAL_FLASHEx_DATAEEPROM_Program(FLASH_TYPEPROGRAMDATA_WORD, eeprom_address, ptr_ram[i]);
             eeprom_address += 4;
     }
+
+    // Calculate the CRC from the payload as it is now stored in EEPROM.
+    // This avoids hashing stack data that may change during the EEPROM write.
+    uint32_t payload_addr = 0x08080000;
+    __HAL_CRC_DR_RESET(&hcrc);
+    HAL_CRC_Accumulate(&hcrc, (uint32_t *)payload_addr, struct_size_words);
+    payload_addr += struct_size_words * sizeof(uint32_t);
+    HAL_CRC_Accumulate(&hcrc, (uint32_t *)payload_addr, 8U);
+    payload_addr += 8U * sizeof(uint32_t);
+    if (ram_words > 16U) {
+        HAL_CRC_Accumulate(&hcrc, (uint32_t *)payload_addr, ram_words - 16U);
+        payload_addr += (ram_words - 16U) * sizeof(uint32_t);
+    }
+    uint32_t checkpoint_crc = hcrc.Instance->DR;
+    printf(" Checkpoint CRC: 0x%08lX \r\n", checkpoint_crc);
+
+    // Store the CRC last, after the complete checkpoint payload
+    HAL_FLASHEx_DATAEEPROM_Program(
+        FLASH_TYPEPROGRAMDATA_WORD,
+        eeprom_address,
+        checkpoint_crc
+    );
 
     HAL_FLASHEx_DATAEEPROM_Lock();
 
@@ -621,43 +620,132 @@ void Save_State_EEPROM(SystemState *saved_state)
 }
 
 
+void Recover_Checkpoint(void)
+{
+    __asm volatile(
+        // Preserve the boot stack pointer for the invalid-checkpoint fallback.
+        "mrs r1, msp \n"
+        "ldr r0, =recovery_return_msp \n"
+        "str r1, [r0] \n"
+        // Switch to a dedicated stack before using the checkpoint destination.
+        "ldr r0, =recovery_stack \n"
+        "add r0, r0, #4096 \n"
+        "bic r0, r0, #7 \n"
+        "mov sp, r0 \n"
+        "b Recover_Checkpoint_C \n"
+    );
+}
+
+void Recover_Checkpoint_C(void)
+{
+    uint32_t eeprom_addr = 0x08080000U;
+    uint32_t *ptr_struct = (uint32_t *)&saved_context;
+    uint32_t struct_size = sizeof(SystemState) / sizeof(uint32_t);
+    uint32_t *ptr_ram;
+    uint32_t ram_words;
+    uint32_t stored_crc;
+    uint32_t calculated_crc;
+    uint32_t payload_addr;
+
+    // Restore the SystemState header while running on the temporary stack.
+    for (uint32_t i = 0U; i < struct_size; i++) {
+        ptr_struct[i] = *(__IO uint32_t *)eeprom_addr;
+        eeprom_addr += sizeof(uint32_t);
+    }
+
+    // Keep the stack payload in EEPROM until its CRC has been validated.
+    ptr_ram = (uint32_t *)saved_context.msp;
+    ram_words = saved_context.stack_size / sizeof(uint32_t);
+
+    // Validate exactly the payload layout stored in EEPROM:
+    // SystemState, R4-R11, local variables, and finally the CRC.
+    __HAL_CRC_DR_RESET(&hcrc);
+    HAL_CRC_Accumulate(&hcrc, (uint32_t *)&saved_context, struct_size);
+    payload_addr = eeprom_addr;
+    HAL_CRC_Accumulate(&hcrc, (uint32_t *)payload_addr, 8U);
+    payload_addr += 8U * sizeof(uint32_t);
+    if (ram_words > 16U) {
+        HAL_CRC_Accumulate(&hcrc, (uint32_t *)payload_addr, ram_words - 16U);
+        payload_addr += (ram_words - 16U) * sizeof(uint32_t);
+    }
+    calculated_crc = hcrc.Instance->DR;
+    stored_crc = *(__IO uint32_t *)payload_addr;
+
+    printf(" Stored checkpoint CRC:    0x%08lX \r\n", stored_crc);
+    printf(" Calculated checkpoint CRC: 0x%08lX \r\n", calculated_crc);
+
+    if (calculated_crc != stored_crc) {
+        printf(" Checkpoint CRC invalid, starting from the beginning \r\n");
+        Restart_From_Boot_Stack();
+    }
+
+    // Restore the stack only after the complete payload has been validated.
+    eeprom_addr = 0x08080000U + struct_size * sizeof(uint32_t);
+    for (uint32_t i = 0U; i < 8U; i++) {
+        ptr_ram[i] = *(__IO uint32_t *)eeprom_addr;
+        eeprom_addr += sizeof(uint32_t);
+    }
+    for (uint32_t i = 16U; i < ram_words; i++) {
+        ptr_ram[i] = *(__IO uint32_t *)eeprom_addr;
+        eeprom_addr += sizeof(uint32_t);
+    }
+
+    printf(" Checkpoint CRC valid, restoring context \r\n");
+    Restore_Context();
+    for (;;) {
+    }
+}
+
+void Restart_From_Boot_Stack(void)
+{
+    __asm volatile(
+        // Leave the temporary recovery stack before starting the application.
+        "ldr r0, =recovery_return_msp \n"
+        "ldr r1, [r0] \n"
+        "msr msp, r1 \n"
+        "b LU_Decomposition \n"
+    );
+}
+
 void Restore_Context(void) __attribute__((naked));
 void Restore_Context(void)
 {
     __asm volatile(
-	// Store in R0 the address of the global variable saved_context,
-	// which contains the data needed for restoration (loaded from EEPROM).
+	// Load the address of saved_context, which contains the restored
+	// exception-frame registers and the checkpoint MSP.
     "ldr r0, = saved_context \n"
 
-	// Restore MSP
-	"ldr r1, [r0, #12] \n"  // MSP is stored at offset 12 in the saved struct; load it into R1
-	"msr msp, r1 \n"        // Force the processor to use that MSP value
-	"pop {r4-r11} \n"       // Restore R4-R11; with the correct MSP, a single pop is enough
+	// Restore MSP and pop the saved R4-R11 words from the restored stack.
+	"ldr r1, [r0, #12] \n"  // MSP is at offset 12 in SystemState.
+	"msr msp, r1 \n"        // Point MSP to the restored checkpoint stack.
+	"pop {r4-r11} \n"       // The first eight stack words are R4-R11.
 
-	// Use R1 to move MSP to the saved local variables
-	"mrs r1, msp \n"        // Load the current MSP value into R1
-	"add r1, r1, #32 \n"    // Skip the exception frame (8 registers x 4 bytes each)
-	"msr msp, r1 \n"        // Update MSP
+	// Move MSP past the restored exception frame. Its registers are restored
+	// explicitly below, so the frame itself is not popped here.
+	"mrs r1, msp \n"        // Read MSP after popping R4-R11.
+	"add r1, r1, #32 \n"    // Skip eight exception-frame words.
+	"msr msp, r1 \n"        // Point MSP to the restored local-variable area.
 
-	// Use R2 to restore PC
-	"ldr r2, [r0, #40] \n"  // PC is at offset 40 in the saved struct; load it into R2
-	"orr r2, r2, #1 \n"     // Set the Thumb bit to avoid a UsageFault (ARM state is not supported)
-	"push {r2} \n"          // Push PC (with LSB = 1) onto the top of the stack
+	// Prepare the return address. The PC is restored by the final pop.
+	"ldr r2, [r0, #40] \n"  // PC is at offset 40 in SystemState.
+	"orr r2, r2, #1 \n"     // Ensure the Cortex-M Thumb bit is set.
+	"push {r2} \n"          // Place the return address on the current stack.
 
-	// Use R2 to restore the program status register (arithmetic flags)
-	"ldr r2, [r0, #44] \n"      // xPSR value is stored at offset 44 in the struct
-	"msr apsr_nzcvq, r2 \n"     // Restore arithmetic flags (NZCVQ)
+	// Restore the arithmetic condition flags from the saved xPSR value.
+	"ldr r2, [r0, #44] \n"      // xPSR is at offset 44 in SystemState.
+	"msr apsr_nzcvq, r2 \n"     // Restore the NZCVQ flags.
 
-	// Restore the remaining registers
+	// Restore the remaining exception-frame registers. R0 is restored last
+	// because R0 is used as the base address of saved_context above.
 	"ldr lr,  [r0, #36] \n"
 	"ldr r12, [r0, #32] \n"
 	"ldr r3,  [r0, #28] \n"
 	"ldr r2,  [r0, #24] \n"
 	"ldr r1,  [r0, #20] \n"
-	"ldr r0,  [r0, #16] \n"  // Restore R0 last, since it is used as the base pointer above
+	"ldr r0,  [r0, #16] \n"  // Restore R0 last.
 
-	// Pop PC (which was pushed to the top of the stack) and return
-	// to the instruction where the checkpoint was taken
+	// Load PC and continue execution at the instruction after the
+	// checkpoint-triggering instruction.
 	"pop {pc} \n"
     );
 }
